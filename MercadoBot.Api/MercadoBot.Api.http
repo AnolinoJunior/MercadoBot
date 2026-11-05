@@ -1,0 +1,18 @@
+@MercadoBot.Api_HostAddress = https://localhost:7197
+@WebhookSecret = COLE_SUA_CHAVE_WEBHOOK_AQUI
+
+POST {{MercadoBot.Api_HostAddress}}/api/telegram/webhook
+Content-Type: application/json
+X-Telegram-Bot-Api-Secret-Token: {{WebhookSecret}}
+
+{
+  "update_id": 1,
+  "message": {
+    "message_id": 1,
+    "chat": {
+      "id": 123456,
+      "type": "private"
+    },
+    "text": "/adicionar arroz"
+  }
+}
