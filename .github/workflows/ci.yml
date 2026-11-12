@@ -1,0 +1,21 @@
+name: CI do MercadoBot
+on: [push]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v6
+
+      - name: Configurar o .NET 8
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Compilar a API
+        run: dotnet build MercadoBot.Api/MercadoBot.Api.csproj --configuration Release
