@@ -59,6 +59,32 @@ namespace MercadoBot.Api.Migrations
 
                     b.ToTable("ItensCompra");
                 });
+
+            modelBuilder.Entity("MercadoBot.Api.Models.TarefaCasa", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<long>("ChatId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Descricao")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int>("DiaSemana")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChatId", "DiaSemana");
+
+                    b.ToTable("TarefasCasa");
+                });
 #pragma warning restore 612, 618
         }
     }

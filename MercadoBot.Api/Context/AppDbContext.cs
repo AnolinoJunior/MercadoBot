@@ -11,10 +11,18 @@ public class AppDbContext : DbContext
     }
 
     public DbSet<ItemCompra> ItensCompra => Set<ItemCompra>();
+    public DbSet<TarefaCasa> TarefasCasa => Set<TarefaCasa>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<TarefaCasa>(entity =>
+        {
+            entity.HasKey(tarefa => tarefa.Id);
+            entity.Property(tarefa => tarefa.Descricao).IsRequired().HasMaxLength(300);
+            entity.HasIndex(tarefa => new { tarefa.ChatId, tarefa.DiaSemana });
+        });
 
         modelBuilder.Entity<ItemCompra>(entity =>
         {

@@ -99,6 +99,18 @@ public class TelegramService
             cancellationToken);
     }
 
+    public Task SolicitarTarefaAsync(long chatId, int mensagemOrigemId, long usuarioId, CancellationToken cancellationToken = default)
+    {
+        return ExecutarAsync("sendMessage", new
+        {
+            chat_id = chatId,
+            text = $"<a href=\"tg://user?id={usuarioId}\">Adicionar tarefa</a>\nO que precisa ser feito?\nReferencia: tarefa:{usuarioId}",
+            parse_mode = "HTML",
+            reply_parameters = new { message_id = mensagemOrigemId, allow_sending_without_reply = true },
+            reply_markup = new { force_reply = true, selective = true, input_field_placeholder = "Descreva a tarefa" }
+        }, cancellationToken);
+    }
+
     public Task ConfirmarCliqueAsync(
         string callbackQueryId,
         CancellationToken cancellationToken = default)

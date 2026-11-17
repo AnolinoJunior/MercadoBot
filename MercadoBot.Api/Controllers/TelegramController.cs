@@ -1,5 +1,9 @@
 ﻿using MercadoBot.Api.DTOs;
 using MercadoBot.Api.Services;
+using MercadoBot.Api.Context;
+using MercadoBot.Api.Models;
+using Microsoft.EntityFrameworkCore;
+using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MercadoBot.Api.Controllers;
@@ -9,16 +13,21 @@ namespace MercadoBot.Api.Controllers;
 public class TelegramController : ControllerBase
 {
     private const string NomeBot = "Pouco_bot";
+    private static readonly ConcurrentDictionary<(long, long), string> Pendentes = new();
+    private static readonly string[] Dias = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
+    private readonly AppDbContext _db;
 
     private readonly TelegramService _telegramService;
     private readonly ListaComprasService _listaComprasService;
     private readonly string _webhookSecret;
 
     public TelegramController(
+        AppDbContext db,
         TelegramService telegramService,
         ListaComprasService listaComprasService,
         IConfiguration configuration)
     {
+        _db = db;
         _telegramService = telegramService;
         _listaComprasService = listaComprasService;
 
@@ -64,6 +73,21 @@ public class TelegramController : ControllerBase
             string.IsNullOrWhiteSpace(mensagem.Text) ||
             !ChatPermitido(mensagem.Chat))
         {
+            return Ok();
+        }
+
+        if (mensagem.From is not null && mensagem.ReplyToMessage?.From?.IsBot == true &&
+            string.Equals(mensagem.ReplyToMessage.From.Username, NomeBot, StringComparison.OrdinalIgnoreCase) &&
+            mensagem.ReplyToMessage.Text?.EndsWith($"Referencia: tarefa:{mensagem.From.Id}", StringComparison.Ordinal) == true)
+        {
+            var descricao = mensagem.Text.Trim();
+            if (descricao.Length is > 0 and <= 300 && !descricao.StartsWith('/'))
+            {
+                Pendentes[(mensagem.Chat.Id, mensagem.From.Id)] = descricao;
+                var botoes = Enumerable.Range(0, 7).Select(d => new[] { new TelegramBotao { Texto = Dias[d], Acao = $"dia_tarefa:{mensagem.From.Id}:{d}" } }).ToArray();
+                await _telegramService.EnviarMensagemComBotoesAsync(mensagem.Chat.Id, "Em qual dia da semana?", botoes, cancellationToken);
+            }
+            else await _telegramService.EnviarMensagemAsync(mensagem.Chat.Id, "Descreva a tarefa em até 300 caracteres, sem comando.", cancellationToken);
             return Ok();
         }
 
@@ -123,6 +147,36 @@ public class TelegramController : ControllerBase
             return;
         }
 
+        if (clique.Data == "tarefas")
+        {
+            var tarefas = await _db.TarefasCasa.AsNoTracking().Where(t => t.ChatId == chat.Id).OrderBy(t => t.Descricao).ToListAsync(cancellationToken);
+            var texto = tarefas.Count == 0 ? "Nenhuma tarefa cadastrada ainda." :
+                string.Join("\n\n", Enumerable.Range(0, 7).Select(i => (i + 1) % 7).Select(d =>
+                    $"{char.ToUpperInvariant(Dias[d][0])}{Dias[d][1..]}\n" + string.Join("\n", tarefas.Where(t => (int)t.DiaSemana == d).Select(t => $"• {t.Descricao}"))));
+            await _telegramService.EnviarMensagemComBotoesAsync(chat.Id, texto,
+                [[new TelegramBotao { Texto = "➕ Adicionar tarefa", Acao = "adicionar_tarefa" }]], cancellationToken);
+            return;
+        }
+        if (clique.Data == "adicionar_tarefa" && clique.From is not null)
+        {
+            Pendentes.TryRemove((chat.Id, clique.From.Id), out _);
+            await _telegramService.SolicitarTarefaAsync(chat.Id, clique.Message!.MessageId, clique.From.Id, cancellationToken);
+            return;
+        }
+        var partesDia = clique.Data.Split(':');
+        if (partesDia.Length == 3 && partesDia[0] == "dia_tarefa" && clique.From is not null &&
+            long.TryParse(partesDia[1], out var solicitante) && solicitante == clique.From.Id &&
+            int.TryParse(partesDia[2], out var dia) && dia is >= 0 and <= 6)
+        {
+            if (Pendentes.TryRemove((chat.Id, clique.From.Id), out var descricao))
+            {
+                _db.TarefasCasa.Add(new TarefaCasa { ChatId = chat.Id, Descricao = descricao, DiaSemana = (DayOfWeek)dia });
+                await _db.SaveChangesAsync(cancellationToken);
+                await _telegramService.RemoverBotoesAsync(chat.Id, clique.Message!.MessageId, cancellationToken);
+                await _telegramService.EnviarMensagemAsync(chat.Id, $"Tarefa salva: {descricao} — {Dias[dia]}.", cancellationToken);
+            }
+            return;
+        }
         if (clique.Data == "adicionar")
         {
             if (clique.From is null)
@@ -454,6 +508,11 @@ public class TelegramController : ControllerBase
                     {
                         Texto = "📜 Histórico",
                         Acao = "historico"
+                    },
+                    new TelegramBotao
+                    {
+                        Texto = "🏠 Tarefas de casa",
+                        Acao = "tarefas"
                     }
                 }
             };
