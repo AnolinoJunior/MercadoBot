@@ -19,3 +19,13 @@ jobs:
 
       - name: Compilar a API
         run: dotnet build MercadoBot.Api/MercadoBot.Api.csproj --configuration Release
+
+      - name: Preparar arquivos para publicação
+        run: dotnet publish MercadoBot.Api/MercadoBot.Api.csproj --configuration Release --no-build --output ./publish -p:UseAppHost=false
+
+      - name: Disponibilizar pacote no GitHub
+        uses: actions/upload-artifact@v7
+        with:
+          name: MercadoBot
+          path: ./publish/
+          if-no-files-found: error
