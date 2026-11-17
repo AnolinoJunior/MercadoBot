@@ -1,6 +1,6 @@
 using MercadoBot.Api.Context;
-using Microsoft.EntityFrameworkCore;
 using MercadoBot.Api.Services;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,7 +17,6 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(connectionString));
 
 builder.Services.AddHttpClient<TelegramService>();
-
 builder.Services.AddScoped<ListaComprasService>();
 
 var app = builder.Build();
@@ -29,9 +28,14 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
 
 app.MapControllers();
+
+app.MapGet("/health/db", async (AppDbContext db, CancellationToken ct) =>
+{
+    var conectado = await db.Database.CanConnectAsync(ct);
+    return Results.StatusCode(conectado ? 200 : 503);
+});
 
 app.Run();
